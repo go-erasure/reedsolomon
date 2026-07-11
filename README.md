@@ -1,3 +1,5 @@
+<p align="center"><img src="https://raw.githubusercontent.com/go-erasure/brand/main/social/go-erasure.png" alt="go-erasure/reedsolomon" width="720"></p>
+
 # reedsolomon
 
 [![CI](https://github.com/go-erasure/reedsolomon/actions/workflows/ci.yml/badge.svg)](https://github.com/go-erasure/reedsolomon/actions/workflows/ci.yml)
