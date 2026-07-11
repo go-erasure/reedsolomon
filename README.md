@@ -40,10 +40,10 @@ kernel; the sub-block tail falls back to the scalar loop.
 | --- | --- | --- |
 | **amd64** | SSSE3 `PSHUFB`, 128-bit, 32 B/iter | native CI + Rosetta |
 | **arm64** | NEON `VLD2`/`TBL`/`VST2`, 32 B/iter | native CI + dev host |
-| **s390x** | z13 vector `VPERM` + `VMRHB`/`VMRLB` | QEMU (differential + 100% cov) |
-| **ppc64le** | POWER8 VSX `LXVD2X`/`VPERM`/`STXVD2X` | QEMU power9 + power8 ISA guard |
-| **riscv64** | RVV `vlseg2e8`/`vrgather.vv`, VLEN-agnostic | QEMU `v=true,vlen=256` (+ 128) |
-| **loong64** | LSX `vshuf.b` + `vilvl.b`/`vilvh.b` | QEMU `la464` |
+| **s390x** | z13 vector `VPERM` + `VMRHB`/`VMRLB` | real z15 (differential + 100% cov) |
+| **ppc64le** | POWER8 VSX `LXVD2X`/`VPERM`/`STXVD2X` | real POWER8E (no SIGILL) + power8 ISA guard |
+| **riscv64** | RVV `vlseg2e8`/`vrgather.vv`, VLEN-agnostic | real X60 RVV1.0 VLEN=256 |
+| **loong64** | LSX `vshuf.b` + `vilvl.b`/`vilvh.b` | real Loongson LSX |
 
 The ppc64le kernel is strictly POWER8-baseline (no ISA-3.0 `LXVB16X`); a dedicated
 CI lane runs it under `QEMU_CPU=power8` to prove it never `SIGILL`s. The riscv64
@@ -51,19 +51,22 @@ kernel dispatches only when the V extension is present (`cpu.RISCV64.HasV`) and 
 byte-granular (segment loads), so it is VLEN-agnostic and free of the misaligned
 wider-load trap.
 
-`galMulAdd` over a 1 MiB region, dev host (Apple arm64):
+### Measured on real hardware (`galMulAdd`, 1 MiB region)
 
-```
-BenchmarkGalMulAddScalar    1447 MB/s
-BenchmarkGalMulAddSIMD     19453 MB/s   (~13.4x, NEON)
-```
+Every kernel is proven byte-identical to the scalar oracle **and** benchmarked on
+real silicon — not QEMU (whose perf is emulation-serialized and meaningless):
 
-Every kernel is proven byte-for-byte identical to the scalar oracle by the
-`galois_simd_test.go` differential size-sweep and fuzz — natively on amd64/arm64
-and under QEMU user emulation on the other four — and each emulated lane also
-gates at 100% statement coverage. Absolute throughput of the four emulated kernels
-is a real-hardware measurement (cfarm POWER/RISC-V/loong, direct LinuxONE s390x)
-tracked separately; correctness does not wait on it.
+| Arch    | Hardware                      | Scalar | SIMD | Speedup |
+|---------|-------------------------------|--------|------|---------|
+| arm64   | Apple M4 Max (NEON)           | 1.45 GB/s | 19.5 GB/s | ~13.4× |
+| ppc64le | POWER8E (VSX `VPERM`)         | 202 MB/s  | 3.41 GB/s | **16.9×** |
+| loong64 | Loongson 3C5000L (LSX)        | 255 MB/s  | 4.26 GB/s | **16.7×** |
+| s390x   | IBM z15 (vector `VPERM`)      | 679 MB/s  | 9.49 GB/s | **14.0×** |
+| riscv64 | SpacemiT X60, RVV1.0 VLEN=256 | 18 MB/s   | 1.11 GB/s | **61.1×** |
+
+amd64 (SSSE3) is verified native on CI. The riscv64 landslide reflects how slow a
+scalar GF(2¹⁶) multiply is on that in-order core — exactly where the table-lookup
+SIMD pays off most.
 
 ## Install
 
