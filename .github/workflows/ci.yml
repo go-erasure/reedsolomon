@@ -12,8 +12,19 @@ env:
   GOWORK: "off"
 
 jobs:
+  # Native amd64 (SSSE3 split-table kernel) and native arm64 (NEON split-table
+  # kernel). The differential fuzz oracle (galois_simd_test.go) proves each SIMD
+  # galMul/galMulAdd bit-identical to the scalar loop, and the gate enforces 100%
+  # Go-statement coverage on each — this is where galois_amd64.s / galois_arm64.s
+  # are compiled, executed, and covered.
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, arch: amd64 }
+          - { os: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -21,12 +32,16 @@ jobs:
           go-version: '1.26.4'
       - name: Vet
         run: go vet ./...
+      - name: Test
+        run: go test -v ./...
+      - name: Differential fuzz
+        run: go test -run '^$' -fuzz FuzzGalMul -fuzztime 20s .
       - name: Test with coverage
         run: go test -covermode=set -coverprofile=cover.out ./...
       - name: Enforce 100% coverage
         run: |
           pct=$(go tool cover -func=cover.out | awk '/^total:/{print $3}' | tr -d '%')
-          echo "total coverage: ${pct}%"
+          echo "total coverage (${{ matrix.arch }}): ${pct}%"
           awk -v p="$pct" 'BEGIN{exit (p+0<100.0)?1:0}'
 
   cross-build:
