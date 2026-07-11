@@ -18,8 +18,9 @@ core for [PAR2](https://en.wikipedia.org/wiki/Parchive).
   layer built on top of this package.
 - **SIMD region multiply**: the field-region hot loops (`galMul`/`galMulAdd`,
   which is all `Encode`/`Verify`/`Reconstruct` spend their time in) have a
-  go-asmgen split-table fast path on amd64 and arm64 — order-of-magnitude faster
-  than the scalar loop, and proven bit-identical to it. See
+  go-asmgen split-table fast path on all six 64-bit targets — amd64, arm64,
+  s390x, ppc64le, riscv64 and loong64 — each proven bit-identical to the scalar
+  loop by a differential oracle (under QEMU for the emulated arches). See
   [Performance](#performance).
 - **100% test coverage**, verified across nine `GOOS/GOARCH` targets.
 
@@ -27,31 +28,42 @@ core for [PAR2](https://en.wikipedia.org/wiki/Parchive).
 
 The region multiply uses the GF-Complete **SPLIT(16,4)** technique: for a fixed
 coefficient, four low-byte and four high-byte 16-entry nibble tables turn a
-GF(2¹⁶) product into eight `PSHUFB`/`TBL` byte-shuffle lookups XORed together, so
-16 words are multiplied per vector instruction instead of one at a time. The Go
-dispatch builds the per-coefficient tables (256 field multiplies, cheap next to
-folding a whole shard) and hands them to the assembly kernel; the sub-block tail
-falls back to the scalar loop.
+GF(2¹⁶) product into eight byte-shuffle lookups XORed together, so 16 words are
+multiplied per iteration instead of one at a time. Each arch expresses the same
+math with its native byte-permute: deinterleave the big-endian words into HI/LO
+byte planes, extract the four nibbles, do the eight table lookups, XOR, and
+re-interleave. The Go dispatch builds the per-coefficient tables (256 field
+multiplies, cheap next to folding a whole shard) and hands them to the assembly
+kernel; the sub-block tail falls back to the scalar loop.
 
-| Arch | Kernel | Status |
+| Arch | Kernel | Verification |
 | --- | --- | --- |
-| **amd64** | SSSE3 `PSHUFB`, 128-bit, 32 B/iter | verified (native CI + Rosetta) |
-| **arm64** | NEON `VLD2`/`TBL`/`VST2`, 32 B/iter | verified (native CI + dev host) |
-| riscv64, ppc64le, s390x, loong64 | scalar fallback | real-hardware follow-up |
+| **amd64** | SSSE3 `PSHUFB`, 128-bit, 32 B/iter | native CI + Rosetta |
+| **arm64** | NEON `VLD2`/`TBL`/`VST2`, 32 B/iter | native CI + dev host |
+| **s390x** | z13 vector `VPERM` + `VMRHB`/`VMRLB` | QEMU (differential + 100% cov) |
+| **ppc64le** | POWER8 VSX `LXVD2X`/`VPERM`/`STXVD2X` | QEMU power9 + power8 ISA guard |
+| **riscv64** | RVV `vlseg2e8`/`vrgather.vv`, VLEN-agnostic | QEMU `v=true,vlen=256` (+ 128) |
+| **loong64** | LSX `vshuf.b` + `vilvl.b`/`vilvh.b` | QEMU `la464` |
+
+The ppc64le kernel is strictly POWER8-baseline (no ISA-3.0 `LXVB16X`); a dedicated
+CI lane runs it under `QEMU_CPU=power8` to prove it never `SIGILL`s. The riscv64
+kernel dispatches only when the V extension is present (`cpu.RISCV64.HasV`) and is
+byte-granular (segment loads), so it is VLEN-agnostic and free of the misaligned
+wider-load trap.
 
 `galMulAdd` over a 1 MiB region, dev host (Apple arm64):
 
 ```
-BenchmarkGalMulAddScalar   1431 MB/s
-BenchmarkGalMulAddSIMD    19379 MB/s   (~13.5x, NEON)
+BenchmarkGalMulAddScalar    1447 MB/s
+BenchmarkGalMulAddSIMD     19453 MB/s   (~13.4x, NEON)
 ```
 
-The other four 64-bit targets build and pass on the scalar fallback today; a
-verified SIMD kernel for them (RVV / VSX / vector-facility / LSX on cfarm and
-direct s390x hardware) is a follow-up — an unverified kernel is worse than
-scalar, so none is shipped until its differential oracle passes on real silicon.
-The scalar loop and the SIMD kernels are checked byte-for-byte against each other
-by a differential fuzz oracle on every CI run.
+Every kernel is proven byte-for-byte identical to the scalar oracle by the
+`galois_simd_test.go` differential size-sweep and fuzz — natively on amd64/arm64
+and under QEMU user emulation on the other four — and each emulated lane also
+gates at 100% statement coverage. Absolute throughput of the four emulated kernels
+is a real-hardware measurement (cfarm POWER/RISC-V/loong, direct LinuxONE s390x)
+tracked separately; correctness does not wait on it.
 
 ## Install
 
