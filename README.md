@@ -10,7 +10,7 @@ Pure-Go, dependency-free **Reed-Solomon erasure code over GF(2¹⁶)**. It works
 both as a general erasure codec for storage redundancy and as the arithmetic
 core for [PAR2](https://en.wikipedia.org/wiki/Parchive).
 
-- **CGO_ENABLED=0**, standard library only, no third-party dependencies.
+- **CGO_ENABLED=0**; the only dependency is `golang.org/x/sys` (CPU feature detection).
 - **MDS** systematic code: a Cauchy generator matrix guarantees any `dataShards`
   of the `dataShards + parityShards` shards reconstruct the original data.
 - **PAR2-compatible field**: GF(2¹⁶) with primitive polynomial `0x1100B` and
