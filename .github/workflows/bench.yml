@@ -1,0 +1,36 @@
+name: bench
+
+# Manual: old (input ref, default main) vs new (this ref) region kernels on a
+# native amd64 and arm64 runner, interleaved old/new/old/new, so the table in a
+# pull request comes from CI hardware and not from a loaded workstation.
+on:
+  workflow_dispatch:
+    inputs:
+      old_ref:
+        description: ref holding the previous kernels
+        default: main
+
+env:
+  CGO_ENABLED: "0"
+  GOWORK: "off"
+
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with: { path: new }
+      - uses: actions/checkout@v7
+        with: { path: old, ref: "${{ inputs.old_ref }}" }
+      - uses: actions/setup-go@v7
+        with: { go-version: '1.27.3', cache: false }
+      - run: lscpu
+      - run: uptime
+      - { name: old 1, working-directory: old, run: 'go test -bench GalMulAdd -benchtime 300x -count 3 .' }
+      - { name: new 1, working-directory: new, run: 'go test -bench GalMulAdd -benchtime 300x -count 3 .' }
+      - { name: old 2, working-directory: old, run: 'go test -bench GalMulAdd -benchtime 300x -count 3 .' }
+      - { name: new 2, working-directory: new, run: 'go test -bench GalMulAdd -benchtime 300x -count 3 .' }

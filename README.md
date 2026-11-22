@@ -10,18 +10,19 @@ Pure-Go, dependency-free **Reed-Solomon erasure code over GF(2¹⁶)**. It works
 both as a general erasure codec for storage redundancy and as the arithmetic
 core for [PAR2](https://en.wikipedia.org/wiki/Parchive).
 
-- **CGO_ENABLED=0**; the only dependency is `golang.org/x/sys` (CPU feature detection).
+- **CGO_ENABLED=0**; the only dependency is [`go-simd/gf65536`](https://github.com/go-simd/gf65536) (the GF(2¹⁶) region kernels; it pulls in `golang.org/x/sys` for CPU feature detection).
 - **MDS** systematic code: a Cauchy generator matrix guarantees any `dataShards`
   of the `dataShards + parityShards` shards reconstruct the original data.
 - **PAR2-compatible field**: GF(2¹⁶) with primitive polynomial `0x1100B` and
   generator `2`. The exported [`GF16`](gf16.go) type can be reused by a PAR2
   layer built on top of this package.
 - **SIMD region multiply**: the field-region hot loops (`galMul`/`galMulAdd`,
-  which is all `Encode`/`Verify`/`Reconstruct` spend their time in) have a
-  go-asmgen split-table fast path on all six 64-bit targets — amd64, arm64,
-  s390x, ppc64le, riscv64 and loong64 — each proven bit-identical to the scalar
-  loop by a differential oracle (under QEMU for the emulated arches). See
-  [Performance](#performance).
+  which is all `Encode`/`Verify`/`Reconstruct` spend their time in) call
+  [`go-simd/gf65536`](https://github.com/go-simd/gf65536), which has a
+  split-table fast path on all six 64-bit targets — amd64 (AVX2, then SSSE3),
+  arm64, s390x, ppc64le, riscv64 and loong64. The kernels moved there from this
+  repository; the differential oracle here still checks them against this
+  package's log-table scalar loop. See [Performance](#performance).
 - **100% test coverage**, verified across nine `GOOS/GOARCH` targets.
 
 ## Performance
@@ -38,7 +39,7 @@ kernel; the sub-block tail falls back to the scalar loop.
 
 | Arch | Kernel | Verification |
 | --- | --- | --- |
-| **amd64** | SSSE3 `PSHUFB`, 128-bit, 32 B/iter | native CI + Rosetta |
+| **amd64** | AVX2 `VPSHUFB`, 256-bit, 64 B/iter (SSSE3 `PSHUFB`, 32 B/iter, below it) | native CI, both tiers |
 | **arm64** | NEON `VLD2`/`TBL`/`VST2`, 32 B/iter | native CI + dev host |
 | **s390x** | z13 vector `VPERM` + `VMRHB`/`VMRLB` | real z15 (differential + 100% cov) |
 | **ppc64le** | POWER8 VSX `LXVD2X`/`VPERM`/`STXVD2X` | real POWER8E (no SIGILL) + power8 ISA guard |
