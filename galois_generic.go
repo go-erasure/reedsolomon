@@ -1,13 +1,11 @@
 package reedsolomon
 
 // This file holds the portable, CGO-free scalar field-region hot loops that
-// dominate Encode/Reconstruct/Verify. On amd64 (SSSE3) and arm64 (NEON) the
-// public galMul/galMulAdd entry points (galois_amd64.go / galois_arm64.go) fold
-// the bulk of each region through a go-asmgen SIMD split-table kernel and defer
-// only the sub-block tail here; on every other architecture galois_fallback.go
-// routes the whole region through these scalar loops. They are therefore both
-// the universal fallback AND the correctness oracle the differential tests
-// (galois_simd_test.go) check the SIMD kernels against, bit for bit.
+// dominate Encode/Reconstruct/Verify. The galMul/galMulAdd entry points
+// (galois.go) delegate to github.com/go-simd/gf65536, which owns the SIMD
+// kernels. These loops are an independent log-table implementation: the
+// correctness oracle the differential tests (galois_simd_test.go) check
+// gf65536 against, bit for bit.
 //
 // Shards are byte slices interpreted as big-endian uint16 words. src is
 // consumed two bytes at a time; any trailing odd byte is ignored (callers

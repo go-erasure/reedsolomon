@@ -6,11 +6,9 @@ import (
 	"testing"
 )
 
-// The SIMD split-table kernels (galois_amd64.s / galois_arm64.s) are validated
-// here against the scalar oracle (galMulScalar / galMulAddScalar) bit for bit.
-// On architectures without a kernel galMul/galMulAdd are the scalar loops
-// themselves, so these tests still pass (scalar vs scalar) and keep the dispatch
-// covered everywhere.
+// The SIMD split-table kernels of github.com/go-simd/gf65536 are validated here
+// against the independent log-table oracle (galMulScalar / galMulAddScalar) bit
+// for bit, through the galMul/galMulAdd entry points.
 
 // diffLengths spans the interesting boundaries of the 32-byte SIMD block: empty,
 // a single word, sub-block, exactly one/two blocks, blocks plus an odd-word tail,
