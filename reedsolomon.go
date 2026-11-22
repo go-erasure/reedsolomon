@@ -11,7 +11,7 @@ var (
 	// does not equal dataShards+parityShards.
 	ErrShardCount = errors.New("reedsolomon: wrong number of shards")
 	// ErrShardSize is returned when shards are not all equal length or their
-	// length is odd (shards are big-endian uint16 words).
+	// length is odd (shards are uint16 words). Also returned by PAR2.
 	ErrShardSize = errors.New("reedsolomon: shards must be equal, even-length")
 	// ErrTooFewShards is returned when fewer than dataShards shards are present
 	// during reconstruction.
@@ -22,8 +22,9 @@ var (
 )
 
 // Encoder is an (n = dataShards + parityShards) Reed-Solomon erasure coder over
-// GF(2^16). Shards are byte slices interpreted as big-endian uint16 words; all
-// shards must share the same even length.
+// GF(2^16), Cauchy generator, big-endian words. It is NOT the PAR2 code: use
+// PAR2 for PAR2-compatible recovery data. Shards are byte slices interpreted as
+// big-endian uint16 words; all shards must share the same even length.
 type Encoder struct {
 	dataShards   int
 	parityShards int
@@ -73,7 +74,8 @@ func (e *Encoder) DataShards() int { return e.dataShards }
 // ParityShards returns the number of parity shards.
 func (e *Encoder) ParityShards() int { return e.parityShards }
 
-// Field returns the GF(2^16) arithmetic core, so a PAR2 layer can reuse it.
+// Field returns the GF(2^16) arithmetic core (the PAR2 field), for callers that
+// want the arithmetic itself.
 func (e *Encoder) Field() *GF16 { return e.field }
 
 // checkShards verifies every shard has the same even length and returns that

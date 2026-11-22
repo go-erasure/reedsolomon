@@ -1,10 +1,18 @@
 // Package reedsolomon implements a pure-Go, dependency-free Reed-Solomon
 // erasure code over GF(2^16).
 //
-// The finite field uses the primitive polynomial 0x1100B and generator 2,
-// making it byte-for-byte compatible with the field used by the PAR2 recovery
-// format. The GF16 type is exported so that a PAR2 layer built on top of this
-// package can reuse the exact same arithmetic core.
+// The finite field uses the primitive polynomial 0x1100B and generator 2, the
+// field of the PAR 2.0 recovery format.
+//
+// Two codes live here, and they are different types so they cannot be mixed:
+//
+//   - Encoder is a systematic Cauchy code over big-endian words, for general
+//     storage redundancy. Its parity is NOT PAR2 recovery data.
+//   - PAR2 is the PAR 2.0 code: the Vandermonde-style matrix of the
+//     specification over little-endian words, producing and consuming the
+//     recovery slices of real PAR2 files (checked against par2cmdline output).
+//
+// The GF16 type is exported so callers can reuse the arithmetic core.
 package reedsolomon
 
 const (

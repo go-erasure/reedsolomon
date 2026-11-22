@@ -17,6 +17,64 @@ func newMatrix(rows, cols int) matrix {
 // singular; callers in this package only ever pass sub-matrices of an MDS
 // generator matrix, which are always invertible.
 func (f *GF16) invert(m matrix) matrix {
+	inv, ok := f.tryInvert(m)
+	if !ok {
+		panic("reedsolomon: singular matrix")
+	}
+	return inv
+}
+
+// pickRows chooses m rows of the n x m matrix c (n >= m) that form an
+// invertible square matrix and returns their indices with the inverse of that
+// matrix. The first m rows are used when they are invertible; otherwise rows
+// are taken greedily, each one kept only if it is independent of those kept
+// before it. ok is false when the rows of c have rank below m.
+func (f *GF16) pickRows(c matrix, m int) (rows []int, inv matrix, ok bool) {
+	// Incremental elimination: basis[col] is a reduced row with a 1 at col. A
+	// row is kept only if independent of those kept before it, so the first m
+	// rows are chosen whenever they are invertible.
+	basis := make([][]uint16, m)
+	rows = make([]int, 0, m)
+	for r := range c {
+		v := append([]uint16(nil), c[r]...)
+		pivot := -1
+		for col := 0; col < m; col++ {
+			if v[col] == 0 {
+				continue
+			}
+			if basis[col] == nil {
+				pivot = col
+				break
+			}
+			factor := v[col]
+			for j := col; j < m; j++ {
+				v[j] ^= f.Mul(factor, basis[col][j])
+			}
+		}
+		if pivot < 0 {
+			continue
+		}
+		scale := v[pivot]
+		for j := pivot; j < m; j++ {
+			v[j] = f.Div(v[j], scale)
+		}
+		basis[pivot] = v
+		rows = append(rows, r)
+		if len(rows) == m {
+			break
+		}
+	}
+	// Rank below m leaves zero rows in sub, which tryInvert refuses.
+	sub := newMatrix(m, m)
+	for k, r := range rows {
+		copy(sub[k], c[r])
+	}
+	inv, ok = f.tryInvert(sub)
+	return rows, inv, ok
+}
+
+// tryInvert is invert reporting singularity instead of panicking.
+func (f *GF16) tryInvert(m matrix) (matrix, bool) {
 	n := len(m)
 	work := newMatrix(n, 2*n)
 	for i := 0; i < n; i++ {
@@ -33,7 +91,7 @@ func (f *GF16) invert(m matrix) matrix {
 				}
 			}
 			if found < 0 {
-				panic("reedsolomon: singular matrix")
+				return nil, false
 			}
 			work[col], work[found] = work[found], work[col]
 		}
@@ -58,5 +116,5 @@ func (f *GF16) invert(m matrix) matrix {
 	for i := 0; i < n; i++ {
 		copy(inv[i], work[i][n:])
 	}
-	return inv
+	return inv, true
 }

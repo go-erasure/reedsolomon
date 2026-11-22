@@ -36,8 +36,12 @@ jobs:
         run: go test -v ./...
       - name: Differential fuzz
         run: go test -run '^$' -fuzz FuzzGalMul -fuzztime 20s .
+      - name: PAR2 decode fuzz
+        run: go test -run '^$' -fuzz FuzzPAR2Reconstruct -fuzztime 20s .
       - name: Test with coverage
-        run: go test -covermode=set -coverprofile=cover.out ./...
+        # The library package only: internal/ holds the fixture and timing
+        # commands, which are programs, not part of the API under the gate.
+        run: go test -covermode=set -coverprofile=cover.out .
       - name: Enforce 100% coverage
         run: |
           pct=$(go tool cover -func=cover.out | awk '/^total:/{print $3}' | tr -d '%')
@@ -66,7 +70,7 @@ jobs:
       - name: build ${{ matrix.arch }} test binary
         run: GOOS=linux GOARCH=${{ matrix.arch }} go test -c -o /tmp/t.test .
       - name: run under QEMU
-        run: docker run --rm --platform linux/${{ matrix.arch }} -e QEMU_CPU=${{ matrix.qemu }} -v /tmp:/t ${{ matrix.image }} /t/t.test -test.v
+        run: docker run --rm --platform linux/${{ matrix.arch }} -e QEMU_CPU=${{ matrix.qemu }} -v /tmp:/t -v ${{ github.workspace }}/testdata:/t/testdata:ro -w /t ${{ matrix.image }} /t/t.test -test.v
 
   cross-build:
     runs-on: ubuntu-latest
