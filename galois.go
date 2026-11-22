@@ -15,3 +15,13 @@ func galMul(f *GF16, dst, src []byte, coeff uint16) {
 func galMulAdd(f *GF16, dst, src []byte, coeff uint16) {
 	gf65536.MulAddSlice(dst, src, coeff)
 }
+
+// galMulLE and galMulAddLE are galMul and galMulAdd for shards of little-endian
+// words, the layout of PAR2 recovery slices; they run the same kernels.
+func galMulLE(f *GF16, dst, src []byte, coeff uint16) {
+	gf65536.MulSliceLE(dst, src, coeff)
+}
+
+func galMulAddLE(f *GF16, dst, src []byte, coeff uint16) {
+	gf65536.MulAddSliceLE(dst, src, coeff)
+}
